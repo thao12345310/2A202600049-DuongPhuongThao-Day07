@@ -48,7 +48,12 @@ class SentenceChunker:
 
     def chunk(self, text: str) -> list[str]:
         # TODO: split into sentences, group into chunks
-        raise NotImplementedError("Implement SentenceChunker.chunk")
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        chunks: list[str] = []
+        for i in range(0, len(sentences), self.max_sentences_per_chunk):
+            chunk = ' '.join(sentences[i:i + self.max_sentences_per_chunk])
+            chunks.append(chunk)
+        return chunks
 
 
 class RecursiveChunker:
@@ -67,11 +72,114 @@ class RecursiveChunker:
 
     def chunk(self, text: str) -> list[str]:
         # TODO: implement recursive splitting strategy
-        raise NotImplementedError("Implement RecursiveChunker.chunk")
+        return self._split(text, self.separators)
 
     def _split(self, current_text: str, remaining_separators: list[str]) -> list[str]:
         # TODO: recursive helper used by RecursiveChunker.chunk
-        raise NotImplementedError("Implement RecursiveChunker._split")
+        if len(current_text) <= self.chunk_size:
+            return [current_text]
+        if not remaining_separators:
+            return [current_text]
+            
+        separator = remaining_separators[0]
+        if separator == "":
+            splits = list(current_text)
+        else:
+            splits = current_text.split(separator)
+            
+        good_splits = []
+        for s in splits:
+            if len(s) <= self.chunk_size:
+                good_splits.append(s)
+            else:
+                good_splits.extend(self._split(s, remaining_separators[1:]))
+                
+        merged = []
+        current_chunk = ""
+        
+        for s in good_splits:
+            if not current_chunk:
+                current_chunk = s
+            elif len(current_chunk) + len(separator) + len(s) <= self.chunk_size:
+                current_chunk += separator + s
+            else:
+                merged.append(current_chunk)
+                current_chunk = s
+                
+        if current_chunk:
+            merged.append(current_chunk)
+            
+        return merged
+
+class SectionChunker:
+    """
+    Split markdown text by section headers (# and ##).
+
+    Each chunk contains one section including its header.
+    If a section exceeds max_section_chars, it is further split
+    by sub-headers or paragraph breaks.
+
+    Design rationale: Handbook/policy documents are organized by sections.
+    Keeping header + content together preserves the topic context of each chunk,
+    making it easier for both embedders and metadata filters to identify relevance.
+    """
+
+    def __init__(self, max_section_chars: int = 1000) -> None:
+        self.max_section_chars = max_section_chars
+
+    def chunk(self, text: str) -> list[str]:
+        if not text:
+            return []
+
+        # Split by markdown headers (lines starting with # or ##)
+        sections = []
+        current_section = ""
+
+        for line in text.split("\n"):
+            # Detect header lines (# or ## but not ### which is too granular)
+            if re.match(r'^#{1,2}\s+', line) and current_section.strip():
+                sections.append(current_section.strip())
+                current_section = line + "\n"
+            else:
+                current_section += line + "\n"
+
+        if current_section.strip():
+            sections.append(current_section.strip())
+
+        # Further split oversized sections by paragraph breaks
+        final_chunks = []
+        for section in sections:
+            if len(section) <= self.max_section_chars:
+                final_chunks.append(section)
+            else:
+                # Extract header (first line if it's a header)
+                lines = section.split("\n")
+                header = ""
+                body_start = 0
+                if lines and re.match(r'^#{1,2}\s+', lines[0]):
+                    header = lines[0]
+                    body_start = 1
+
+                # Split body by paragraph breaks
+                body = "\n".join(lines[body_start:])
+                paragraphs = body.split("\n\n")
+
+                current_chunk = header
+                for para in paragraphs:
+                    if not para.strip():
+                        continue
+                    candidate = (current_chunk + "\n\n" + para).strip() if current_chunk else para.strip()
+                    if len(candidate) <= self.max_section_chars:
+                        current_chunk = candidate
+                    else:
+                        if current_chunk.strip():
+                            final_chunks.append(current_chunk.strip())
+                        current_chunk = (header + "\n\n" + para).strip() if header else para.strip()
+
+                if current_chunk.strip():
+                    final_chunks.append(current_chunk.strip())
+
+        return final_chunks
 
 
 def _dot(a: list[float], b: list[float]) -> float:
@@ -87,7 +195,12 @@ def compute_similarity(vec_a: list[float], vec_b: list[float]) -> float:
     Returns 0.0 if either vector has zero magnitude.
     """
     # TODO: implement cosine similarity formula
-    raise NotImplementedError("Implement compute_similarity")
+    dot_product = _dot(vec_a, vec_b)
+    norm_a = math.sqrt(_dot(vec_a, vec_a))
+    norm_b = math.sqrt(_dot(vec_b, vec_b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot_product / (norm_a * norm_b)
 
 
 class ChunkingStrategyComparator:
@@ -95,4 +208,17 @@ class ChunkingStrategyComparator:
 
     def compare(self, text: str, chunk_size: int = 200) -> dict:
         # TODO: call each chunker, compute stats, return comparison dict
-        raise NotImplementedError("Implement ChunkingStrategyComparator.compare")
+        chunkers = {
+            "fixed_size": FixedSizeChunker(chunk_size=chunk_size),
+            "by_sentences": SentenceChunker(max_sentences_per_chunk=3),
+            "recursive": RecursiveChunker(chunk_size=chunk_size),
+        }
+        results = {}
+        for name, chunker in chunkers.items():
+            chunks = chunker.chunk(text)
+            results[name] = {
+                "count": len(chunks),
+                "avg_length": sum(len(c) for c in chunks) / len(chunks) if chunks else 0.0,
+                "chunks": chunks
+            }
+        return results

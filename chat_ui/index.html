@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Chat interface for 37signals Employee Handbook powered by RAG with SectionChunker + Metadata Filtering (V2 Strategy)">
+    <title>📚 Handbook AI — Chat V2</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">📚</span>
+                    <div class="logo-text">
+                        <h1>Handbook AI</h1>
+                        <span class="logo-badge">V2 Strategy</span>
+                    </div>
+                </div>
+                <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Toggle sidebar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 18l-6-6 6-6"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-section-title">🧩 Chunking Strategy</h3>
+                <div class="strategy-card">
+                    <div class="strategy-name">SectionChunker</div>
+                    <div class="strategy-detail">max_section_chars = 1000</div>
+                    <div class="strategy-detail">+ Metadata Filtering (all queries)</div>
+                    <div class="strategy-stats" id="strategy-stats">
+                        <div class="stat">
+                            <span class="stat-value" id="stat-docs">—</span>
+                            <span class="stat-label">Tài liệu</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value" id="stat-chunks">—</span>
+                            <span class="stat-label">Chunks</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-section-title">📂 Tài Liệu</h3>
+                <div class="doc-list" id="doc-list">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-section-title">🏷️ Categories</h3>
+                <div class="category-list" id="category-list">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="embedder-info" id="embedder-info">MockEmbedder (64-dim)</div>
+                <div class="credit">Dương Phương Thảo — Lab 7</div>
+            </div>
+        </aside>
+
+        <!-- Main chat area -->
+        <main id="main" class="main">
+            <!-- Header -->
+            <header class="chat-header">
+                <button id="mobile-menu" class="mobile-menu" aria-label="Open menu">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12h18M3 6h18M3 18h18"/>
+                    </svg>
+                </button>
+                <div class="header-center">
+                    <h2>Sổ Tay Nhân Viên — 37signals</h2>
+                    <p class="header-subtitle">RAG Chat với chiến thuật SectionChunker + Metadata Filtering</p>
+                </div>
+                <div class="header-right">
+                    <button id="toggle-chunks" class="icon-btn" title="Hiện/Ẩn retrieved chunks" aria-label="Toggle chunks">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                    </button>
+                    <button id="clear-chat" class="icon-btn" title="Xóa hội thoại" aria-label="Clear chat">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Messages area -->
+            <div class="messages-container" id="messages-container">
+                <div class="messages" id="messages">
+                    <!-- Welcome message -->
+                    <div class="welcome-screen" id="welcome-screen">
+                        <div class="welcome-icon">🤖</div>
+                        <h2 class="welcome-title">Xin chào! Tôi là Handbook AI</h2>
+                        <p class="welcome-desc">
+                            Tôi sử dụng chiến thuật <strong>SectionChunker + Metadata Filtering (V2)</strong> để tìm kiếm
+                            thông tin trong Sổ tay nhân viên 37signals. Hãy hỏi tôi bất cứ điều gì!
+                        </p>
+                        <div class="welcome-badges">
+                            <span class="badge badge-purple">🧩 SectionChunker</span>
+                            <span class="badge badge-blue">🏷️ Auto-Filter</span>
+                            <span class="badge badge-green">📄 9 Tài liệu</span>
+                            <span class="badge badge-orange">⚡ RAG Pipeline</span>
+                        </div>
+                        <div class="suggestions" id="suggestions">
+                            <h3>Thử hỏi:</h3>
+                            <div class="suggestion-grid" id="suggestion-grid">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input area -->
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <div class="filter-indicator" id="filter-indicator" style="display:none;">
+                        <span class="filter-icon" id="filter-icon">🔍</span>
+                        <span class="filter-label" id="filter-label">Auto-filter</span>
+                        <button class="filter-clear" id="filter-clear" aria-label="Clear filter">&times;</button>
+                    </div>
+                    <div class="input-row">
+                        <textarea id="chat-input" 
+                            placeholder="Hỏi về sổ tay nhân viên 37signals..." 
+                            rows="1"
+                            aria-label="Chat input"></textarea>
+                        <button id="send-btn" class="send-btn" disabled aria-label="Send message">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <line x1="22" y1="2" x2="11" y2="13"/>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="input-hint">
+                        <span>V2: SectionChunker (1000) + Metadata Filter trên tất cả queries</span>
+                        <span class="shortcut">Enter ↵ để gửi</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
